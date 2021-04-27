@@ -1,0 +1,134 @@
+                                                                           ┌───────────────────────┐
+                                                                           ▄▄▄▄▄ ▄▄▄▄▄ ▄▄▄▄▄       │
+                                                                           │ █   █ █ █ █   █       │
+                                                                           │ █   █ █ █ █▀▀▀▀       │
+                                                                           │ █   █   █ █     ▄     │
+                                                                           │                 ▄▄▄▄▄ │
+                                                                           │                 █   █ │
+                                                                           │                 █   █ │
+                                                                           │                 █▄▄▄█ │
+                                                                           │                 ▄   ▄ │
+                                                                           │                 █   █ │
+                                                                           │                 █   █ │
+                                                                           │                 █▄▄▄█ │
+                                                                           │                 ▄▄▄▄▄ │
+                                                                           │                   █   │
+Désinfecteur PT_NOTE                                                       │                   █   │
+~ manizzle                                                                 └───────────────────█ ──┘
+
+Salut tout le monde. Pour commencer, je ne suis pas un AVer. Les antivirus sont nuls, ils sont bugués et sont généralement exploitatable. N'hésitez pas à fuzzer lief et capstone à mort. Je suis sûr qu'ils ont des bugs. Maintenant, comment désinfecter...
+
+La technique d'injection PT_NOTE est assez propre et permet de remplir un emplacement mémoire prêt à l'emploi avec des goodies. Mais avec toutes les techniques d'infection, il existe généralement une technique de désinfection. C'est la vie.
+
+J'aime penser à la facilité de désinfection comme moyen de mesurer à quel point une technique d'infection est efficace. Plus une technique de désinfection a de constantes, plus elle sera cassée rapidement. Le jeu du chat et de la souris continue et est le seul moyen de développer des virii de plus en plus insidieux. Continuez à jouer par vous-même et votre virus deviendra l'objet de folie et d'émerveillement.
+
+Dans cette désinfection, nous utilisons le fait que la plupart des virii essaieront de charger le segment PT_NOTE aussi loin que possible au cas où le binaire serait grand et ils essaient de s'assurer que les goodies ne sont pas écraser et causent des problèmes de chargement avec le binaire parce que vous devez être sournois, non ?
+
+Nous utilisons le Kmeans pour commencer et regrouper les segments PT_LOAD puis nous utiliserons l'inertie des clusters par rapport à leurs centroïdes comme un moyen de mesurer l'efficacité du Kmeans. Habituellement, lors des infections, il y a 1 PT_NOTE infecté mais peut-être que plus tard sblip vous dira, parfois il y en a 2 :)
+
+  if (math.log(cluster_1.inertia_)/math.log(cluster_2.inertia_)) < INERTIA_RATIO:
+
+Une fois que nous avons découvert quels segments semblent être mappés un peu plus loin que d'habitude (si vous vouliez vous pourriez mapper le PT_NOTE entre des PT_LOADS valides et re-baser l'image entière, mais qui ferait une chose pareille ?), Nous pouvons plonger dans son code.
+
+Habituellement, ces virii infectent plus de fichiers, mais à un moment donné, ils doivent laisser le programme continuer son exécution, vous savez, pour éviter tout soupçon. Nous pouvons supposer que le jmp vers le point d'entrée d'origine se produit à la fin du segment PT_NOTE infecté, nous recherchons donc cela.
+
+Parfois, le jmp est direct, parfois il est dérivé. Nous suivons simplement la cible jmp jusqu'à un point où elle ajoute l'OEP (Original Entry Point - le point d'entré d'origine) à la base qu'elle a calculée auparavant (si vous voulez être vraiment sophistiqué, vous pouvez toujours utiliser une chaîne use-def, mais bien sûr, le virii peut être plus sophistiqué et vous forcer à résoudre votre chaîne en dehors des limites des fonctions OH MON DIEU!)
+
+  add {target}, CONST
+
+Popez ca dans votre PHDR et vous êtes de retour au cœur de l'action.
+
+Je vous souhaite plus de chance la prochaine fois les amis!
+
+##################################################################
+
+#!/usr/bin/env python3
+
+from capstone import *
+from collections import Counter
+import lief
+import math
+import numpy as np
+from sklearn.cluster import KMeans
+import sys
+
+# dont be an anti-re sucker dude
+SUCKER_PUNCH = 3
+# tested on a few large and small binaries
+# most normal binaries fall within the range of 1.0SOMETHING
+# even large multi-megabytes ones. I am sure we can find something
+# that breaks it though
+INERTIA_RATIO = 1.1
+
+def find_anomalous_load_segment(segment_ranges):
+  segment_array = np.array(segment_ranges)
+  cluster_2 = KMeans(n_clusters=2, random_state=0).fit(segment_array)
+  cluster_1 = KMeans(n_clusters=1, random_state=0).fit(segment_array)
+  if (math.log(cluster_1.inertia_)/math.log(cluster_2.inertia_)) < INERTIA_RATIO:
+    print("No anomaly detected")
+    return None
+  cluster_counts = {v:k for k,v in Counter(cluster_2.labels_.tolist()).items()}
+  if 1 not in cluster_counts:
+    print("No singular cluster found")
+    return None
+  return segment_array[np.where(cluster_2.labels_ == cluster_counts[1])[0]][0]
+
+
+def find_oep(segment_bytes, segment_start):
+  # we support x64-64 for now but this can be easily ported to 
+  # other architectures as needed. Would be cool to use an IR 
+  # here so that it is cross-platform
+  md = Cs(CS_ARCH_X86, CS_MODE_64)
+  md.skipdata = True
+  oep = None
+  last_jump = None
+  early_bail = 0
+  for r in [instr for instr in md.disasm(segment_bytes, segment_start)][::-1]:
+    if last_jump:
+      # if we see an instruction of the form 
+      # add {target}, CONST
+      # we are probably adding the OEP to the base address
+      # We can make this more generic by actually constructing a
+      # real use-def chain here and solving for the actual value of 
+      # rax here. Would require for finding functions like get_rip
+      # which are used to make jmps to the relative code easier
+      if last_jump + ", " in r.op_str and "add" == r.mnemonic.strip():
+        try:
+          oep = int(r.op_str.split(",")[1].strip(), 16)
+          break
+        except Exception as e:
+          # keep going, but unlikely we find it now
+          # keep trying a few more, but not too much
+          # you dont want to be suckered by some anti-re
+          early_bail += 1
+          if early_bail == SUCKER_PUNCH:
+            break
+          continue
+    if not last_jump and r.mnemonic.strip() == "jmp":
+      target = r.op_str.strip()
+      # Try to see if the jmp happens directly
+      # then take that value as the OEP
+      try:
+        oep = int(target, 16)
+        break
+      except Exception as e:
+        # If not, it is probably a register jump
+        oep = None
+        last_jump = target
+  return oep
+
+def main():
+  l = lief.parse(sys.argv[1])
+  load_segs = [ [ll.virtual_address, ll.virtual_address + ll.virtual_size]
+        for ll in l.segments
+        if ll.type == lief.ELF.SEGMENT_TYPES.LOAD
+      ]
+  anomalous_segment_start, anomalous_segment_end = find_anomalous_load_segment(load_segs)
+  segment_bytes = l.get_content_from_virtual_address(anomalous_segment_start, anomalous_segment_end)
+  real_oep = find_oep(bytes(segment_bytes), anomalous_segment_start)
+  print("found OEP: ", hex(real_oep))
+  l.header.entrypoint = real_oep
+  l.write(sys.argv[1] + ".cleaned")
+
+if __name__ == "__main__":
+  main()

@@ -1,0 +1,215 @@
+ _ .-') _     ('-.   ('-.     _ .-') _        .-. .-')               .-') _     ('-.    .-')
+( (  OO) )  _(  OO) ( OO ).-.( (  OO) )       \  ( OO )             (  OO) )  _(  OO)  ( OO ).
+ \     .'_ (,------./ . --. / \     .'_        ;-----.\  ,--.   ,--./     '._(,------.(_)---\_)
+ ,`'--..._) |  .---'| \-.  \  ,`'--..._)       | .-.  |   \  `.'  / |'--...__)|  .---'/    _ |
+ |  |  \  ' |  |  .-'-'  |  | |  |  \  '       | '-' /_).-')     /  '--.  .--'|  |    \  :` `.
+ |  |   ' |(|  '--.\| |_.'  | |  |   ' |       | .-. `.(OO  \   /      |  |  (|  '--.  '..`''.)
+ |  |   / : |  .--' |  .-.  | |  |   / :       | |  \  ||   /  /\_     |  |   |  .--' .-._)   \
+ |  '--'  / |  `---.|  | |  | |  '--'  /       | '--'  /`-./  /.__)    |  |   |  `---.\       /
+ `-------'  `------'`--' `--' `-------'        `------'   `--'         `--'   `------' `-----'
+                                                                                  ~ xcellerator
+
+Oyez, chers fidèles de l'ELF! Dans cet article, je souhaite vous présenter une petite bibliothèque sur laquelle je travaille appelé LibGolf. Elle a commencé comme un simple moyen de mieux comprendre ELF et les en-têtes de programme, mais est devenu quelque chose de raisonnablement pratique. Elle rend très facile la génération d'un binaire constitué d'un en-tête ELF, suivi d'un seul en-tête de programme, suivi d'un seul segment chargeable. Par défaut, tous les champs des en-têtes sont définis sur des valeurs saines, mais il est simple de jouer avec ces valeurs par défaut - et c'est ce dont parle cet article! je vais démontrer comment j'ai utilisé LibGolf pour énumérer précisément quels octets sont nécessaires et lesquels sont ignorés par le loader Linux. Heureusement, il s'avère que le loader est l'un des analyseurs les moins pointilleux parmi la boîte à outils Linux standard. Avant de terminer, nous verrons plusieurs outils d'analyse statiques populaires s'effondrant devant notre ELF corrompu, tandis que le loader continue à le charger joyeusement et sauter à nos octets choisis.
+
++-------------------------------+
+|--[ Présentation de LibGolf ]--|
++-------------------------------+
+
+Il y a quelque temps, j'avais joué avec l'écriture manuelle de fichiers ELF dans NASM. C'était amusant pendant un moment (et a certainement ses avantages), j'ai réalisé qu'il me manquais tout le fun que les structures C ont à offrir. En particulier, comme de nombreux lecteurs le savent sans doute, <linux / elf.h>, est plein de choses amusantes comme `Elf64_Ehdr` et` Elf32_Phdr` prêt à utiliser. 
+
+Ne voulant pas que ces includes utiles soient gaspillés, j'ai choisi de m'en servir à bon escient. De ces efforts, est née libgolf.h, une bibliothèque qui permet de facilement intégrer un shellcode dans un exécutable fonctionnel. Je sais ce que vous pensez - "cela ressemble juste à un très mauvais linker!", et vous avez peut-être raison. Cependant, ce qui est bien ici, c'est que vous pouvez facilement modifier les en-têtes * avant * de créer l'exécutable.
+
+Voyons comment cela fonctionne. Si vous voulez jouer à la maison, vous pouvez trouver le code source de tout cela à [0]. Vous pouvez trouver le code de cet article dans 'examples/01_dead_bytes'. La configuration de base nécessite deux fichiers; un fichier source C et un shellcode.h. Pour le shellcode, j'aime y aller avec le bon vieux 'b0 3c 48 31 ff 0f 05', qui se désassemble en:
+
+        mov al, 0x3c    @ b0 3c
+        xor rdi, rdi    @ 48 31 ff
+        syscall         @ 0f 05
+
+(Oui - appeler ca un "shellcode" c'est un peu abusé!)
+
+Essentiellement, il appelle exit(0). C'est bien car on peut facilement vérifier l'exécution réussi avec le shell $?.
+
+Utilisez celui-ci ou un autre shellcode (mais assurez-vous qu'il PIC - il n'y a aucun support pour relocaliser les symboles!) dans un buffer appelé buf[] dans shellcode.h et retournez dans le fichier C. Si vous vouliez juste obtenir un binaire qui exécute votre shellcode, alors c'est tout ce dont vous avez besoin:
+
+        #include "libgolf.h"
+        #include "shellcode.h"
+
+        int main(int argc, char **argv)
+        {
+            INIT_ELF(X86_64,64);
+
+            GEN_ELF();
+            return 0;
+        }
+
+Compiler ceci et lancer l'exécutable résultant vous fournira un fichier .bin - c'est votre ELF tout beau, tout neuf! Assez simple, non? La simplicité est souvent accompagnée par l'ennui, comme ici, alors faisons quelque chose de plus intéressant!
+
+Avant de continuer, cela vaut la peine d'expliquer ce que font ces deux macros dans les coulisses. Tout d'abord, INIT_ELF () prend deux arguments, l'ISA et l'architecture. Actuellement, LibGolf prend en charge X86_64, ARM32 et AARCH64 en tant qu'ISA valides et 32 ​​ou 64 pour l'architecture. Il met d'abord en place certaines structures de internes et décide s'il doit utiliser les objets Elf32_ * ou Elf64_ * pour les en-têtes. Il attribue également des pointeurs à l'en-tête ELF et à l'en-tête de programme, respectivement appelées ehdr et phdr. Ce sont ces pointeurs que nous utiliserons pour modifier facilement les champs. A part ça, il copie également le buffer du shellcode et remplit les en-têtes ELF et programme avant de calculer un point d'entrée. Vient maintenant GEN_ELF (), qui affiche juste de belles statistiques sur stdout, puis écrit les structures appropriées dans le fichier .bin. Le nom du .bin est déterminé par argv [0].
+
+Donc, après avoir utilisé la macro INIT_ELF (), ehdr et phdr sont disponibles. Supposez que nous voulions modifier le champ e_version de l'en-tête ELF. Il suffit d'ajouter une seule ligne:
+
+        #include "libgolf.h"
+        #include "shellcode.h"
+
+        int main(int argc, char **argv)
+        {
+            INIT_ELF(X86_64);
+
+            // Set e_version to 12345678
+            ehdr->e_version = 0x78563412;
+
+            GEN_ELF();
+            return 0;
+        }
+
+Une rapide recompilation et exécution, et vous aurez un autre fichier .bin qui vous attend. Jeter un oeil à ce fichier avec xxd, hexyl, ou votre manipulateur favori, vous verrez qu'un '12 34 56 78' vous regarde à l'offset 0x14. C'était pas facile?
+
+Pour aller un peu plus vite, j'aime utiliser le Makefile suivant:
+
+        .PHONY golf clean
+
+        CC=gcc
+        CFLAGS=-I.
+        PROG=golf
+
+        golf:
+        	@$(CC) -o $(PROG) $(PROG).c
+        	@./$(PROG)
+        	@chmod +x $(PROG).bin
+
+        	@rm $(PROG) $(PROG).bin
+
+(C'est le Makefile que vous trouverez dans le dépôt [0])
+
++----------------------------------+
+|--[ Tomber Au Premier Obstacle ]--|
++----------------------------------+
+
+Comme beaucoup le savent, les parseurs de fichiers sont horribles. Alors que les spécifications ont généralement des objectifs sérieux, ceux-ci sont rarement respectés par ceux qui devraient les respecter. Chef parmi ces blasphémateurs est le loader ELF Linux en personne. LibGolf permet facilement d'étudier l'étendue de ces crimes contre elf.h.
+
+Un bon point de départ est le tout début, l'en-tête ELF. Au début de tout fichier ELF est bien sûr, le familier 0x7f suivi de ELF, connu de ses amis comme EI_MAG0 à EI_MAG3. Sans surprise, la modification de l'un de ces quatre octets entraîne le rejet du fichier par le loader Linux. Dieu merci pour ca!
+
+Qu'en est-il de l'octet 0x5 ? Notre fidèle spécification nous indique qu'il s'agit de l'octet EI_CLASS qui indique l'architecture cible. Les valeurs acceptables sont 0x01 et 0x02, respectivement pour 32 et 64 bits. je vais le redire: les valeurs acceptables sont 0x01 et 0x02. Et si nous le définissions à 0x58 (ou "X" pour les adhérents ASCII) ? Nous pouvons le faire en ajoutant:
+
+        (ehdr->e_ident)[EI_CLASS] = 0x58;
+
+à notre fichier C. (Pourquoi 0x58? Il apparaît clairement dans la sortie xxd / hexyl!)
+
+Avant d'essayer d'exécuter notre nouveau fichier .bin, essayons quelques outils de parsing ELF pour rechercher d'autres coupables. Le premier sur la liste est gdb. Continuez, Je vous attend. Que c'est-il passé ?
+
+        "not in executable format: file format not recognized"
+
+De même, objdump vous donnera une réponse similaire. Il semble que ces analyseurs font leur travail
+correctement. Maintenant, essayons d'exécuter le binaire normalement.
+
+        <spoiler>Cela fonctionne parfaitement.</spoiler>
+
+Si vous utilisez mon shellcode d'exemple, alors une consultation de $? vous informera à regret que le binaire s'est terminé avec succès. Les mêmes crimes sont commis lorsque vous définissez EI_DATA et EI_VERSION avec des valeurs illégales.
+
++------------------------------------+
+|--[ Pousser la corruption à fond ]--|
++------------------------------------+
+
+Alors, jusqu'où pouvons-nous aller? Quelles parties de l'en-tête ELF et de l'en-tête de programme le loader Linux ignorera-t-il ? Nous avons déjà couvert EI_CLASS, EI_DATA et EI_VERSION, mais il s'avère que EI_OSABI est également ignoré en toute sécurité. Cela nous amène à jusqu'à l'octet 0x8. Selon la spécification, la prochaine étape est EI_ABIVERSION et EI_PAD qui, ensemble, nous amènent à l'octet 0xf. Personne ne se soucie d'eux semble-t-il, alors nous pouvons tous les définir à 0x58 sans crainte.
+
+Continuant plus loin, nous tombons sur un champ qui semble résister à la confusion: e_type. Naturellement, le loader Linux n'aime pas si nous ne lui disons pas quel type de fichier ELF nous lui fournissons (il est bon de savoir qu'il a * un semblant * de standard! - jeu de mots volontaire). Nous avons besoin que ces deux octets restent à la valeur 0x0002 (ou ET_EXEC pour les acolytes elf.h). Ensuite, il y a un autre octet pointilleux, le trop familier 0x12: e_machine, qui désigne l'ISA cible. Autant que nous soyons concerné, en spécifiant X86_64 comme premier argument de INIT_ELF (), cet octet a déjà été rempli à 0x3e pour nous par LibGolf.
+
+Soudain, une e_version sauvage apparaît! Nous voilà confrontés à un autre dissident, qui devrait toujours avoir la valuer 0x00000001. Cependant, dans la pratique, personne ne semble s'en soucier, alors remplissons la avec 0x58585858.
+
+A la suite de cette chaîne d'hérétiques, nous avons quelques champs importants qui semblent résistants aux abus; e_entry et e_phoff. Je suis sûr que je n'ai pas besoin d'entrer dans les détails sur e_entry; C'est le point d'entrée du binaire, où l'exécution sera transférée une fois les sections chargées en mémoire. Alors que l'on pourrait s'attendre à ce que le loader se débrouille sans savoir ce quel est l'offset à partir de l'en-tête du programme, il semble qu'il n'est pas assez intelligent pour le comprendre sans être nourri à la cuillère. Mieux vaut laisser ces deux champs tranquilles.
+
+LibGolf ne supporte pas encore les en-têtes de section (et étant donné qu'il se concentre sur la production de * petits * binaires, il peu probable qu'il les supporte à l’avenir). Cela signifie que, pour toutes les en-têtes s'y rapportant, nous pouvons jouer à notre guise. Cela inclut e_shoff, e_shentsize, eh_shnum et même e_shstrndx. Si nous n'avons aucune en-tête de section, nous ne pouvons être tenus responsables de leur corruption!
+
+Les champs restants qui semblent importer au loader Linux sont e_ehsize, e_phentsize, et e_phnum. Encore une fois, ce n'est pas trop surprenant, car ils sont concernés par le chargement du seul segment chargeable en mémoire avant de passer la main. Si vous avez besoin d'un rappel, e_ehsize est le taille de l'en-tête ELF (qui est respectivement 0x34 ou 0x40 pour 32 et 64 bits), eh_phentsize est la taille de l'en-tête du programme à venir (encore une fois, codé en dur à 0x20 ou 0x38 pour 32 et 64 bits). Si le loader avait été un peu plus pointilleux sur EI_CLASS, il n'aurait pas besoin ces deux champs. Enfin, e_phnum est juste le nombre d'entrées dans l'en-tête du programme - pour nous c'est toujours 0x1. Sans aucun doute, cela est utilisé pour une boucle dans les routines de chargement de la mémoire, mais je ne l'ai pas encore enquêté plus loin.
+
+Il reste encore un champ dans l'en-tête ELF que je n'ai pas abordé, à savoir e_flags. La raison est assez simple, il dépend de l'architecture. Pour x86_64, cela n'a pas d'importance car il n'est pas défini (bien que * soit * important pour certaines plates-formes ARM! Jetez un œil à l'exemple arm32 à [0]).
+
+Cela nous amène à la fin de l'en-tête ELF. Pour ceux qui ne tiennent pas les comptes, un peu plus de 50% de l'en-tête ELF est ignorée par le loader. Mais qu'en est-il de l'en-tête de programme ? Il s'avère que les en-têtes de programme ont beaucoup moins de marge de manœuvre, mais pas pour la raison à laquelle on s'attend. En effet, * toute * corruption de l'en-tête du programme n'affectera pas réellement le loader Linux. Nous pourrions tout remplir avec notre fidèle 0x58, et le loader ne s'en soucierais pas du tout. Mais attention, aventurier audacieux, tripotez le mauvais octet et vous serez plongé dans le donjon de la faute de segmentation!
+
+Alors, y a-t-il quelque chose susceptible d'être altéré dans l'en-tête de programme ? Il s'avère qu'il y a deux champs qui, malgré eux, ne servent plus à rien: p_paddr et p_align. Le premier était important à l'époque grisante d'avant la mémoire virtuelle, où 4 Go de RAM n'étaient qu'un rêve d'enfant et il était donc important d'informer le loader où, en mémoire physique, le segment devait être chargé.
+
+L'alignement de la mémoire est amusant. On suppose que p_vaddr est censé être égal à p_offset modulo p_align. Les "bon" fichiers ELF (au moins ceux compilés avec GCC) semblent simplement définir p_offset égal à p_vaddr et continue leur chemin. C'est aussi ce que fait LibGolf par défaut ce qui rend p_align totalement superflu!
+
+Dans l'ensemble, moins amusant que l'en-tête ELF, mais il y a encore quelques faibles gains. Le fichier C générant le binaire ressemble maintenant à ceci:
+
+        #include "libgolf.h"
+        #include "shellcode.h"
+
+        int main(int argc, char **argv)
+        {
+            INIT_ELF(X86_64,64);
+
+            /*
+             * Breaks common static analysis tools like gdb and objdump
+             */
+            (ehdr->e_ident)[EI_CLASS] = 0x58;   // Architecture
+            (ehdr->e_ident)[EI_DATA] = 0x58;    // Endianness
+            (ehdr->e_ident)[EI_VERSION] = 0x58; // Supposedly, always 0x01
+            (ehdr->e_ident)[EI_OSABI] = 0x58;   // Target OS
+
+            // Loop over the rest of e_ident
+            int i;
+            for ( i = 0 ; i < 0x10 ; i++ )
+                (ehdr->e_ident)[i] = 0x58;
+
+            ehdr->e_version = 0x58585858;       // Supposedly, always 0x00000001
+
+            // Section headers? We don't need no stinkin' section headers!
+            ehdr->e_shoff = 0x5858585858585858;
+            ehdr->e_shentsize = 0x5858;
+            ehdr->e_shnum = 0x5858;
+            ehdr->e_shstrndx = 0x5858;
+
+            ehdr->e_flags = 0x58585858;         // x86_64 has no defined flags
+
+            phdr->p_paddr = 0x5858585858585858; // Physical address is ignored
+            phdr->p_align = 0x5858585858585858; // p_vaddr = p_offset, so irrevelant
+
+            GEN_ELF();
+            return 0;
+        }
+
+Si vous compilez et exécutez ce programme, vous obtiendrez le binaire suivant:
+
+        00000000: 7f45 4c46 5858 5858 5858 5858 5858 5858  .ELFXXXXXXXXXXXX
+        00000010: 0200 3e00 5858 5858 7800 4000 0000 0000  ..>.XXXXx.@.....
+        00000020: 4000 0000 0000 0000 5858 5858 5858 5858  @.......XXXXXXXX
+        00000030: 5858 5858 4000 3800 0100 5858 5858 5858  XXXX@.8...XXXXXX
+        00000040: 0100 0000 0500 0000 0000 0000 0000 0000  ................
+        00000050: 0000 4000 0000 0000 5858 5858 5858 5858  ..@.....XXXXXXXX
+        00000060: 0700 0000 0000 0000 0700 0000 0000 0000  ................
+        00000070: 5858 5858 5858 5858 b03c 4831 ff0f 05    XXXXXXXX.<H1...
+
+Ce fichier a une taille de 127 octets, mais nous avons pu remplacer un total de 50 octets par 'X', ce qui signifie qu'un peu moins de 40% de ce binaire est ignoré par le loader ELF Linux! Qui sait ce que vous pourriez faire avec 50 octets?
+
+Il s'avère - pas mal de chose. Des recherches étonnantes d'il y a quelques années par netspooky ont montré comment vous pouvez empiler des parties de l'en-tête du programme dans l'en-tête ELF. En combinaison avec le stockage de votre shellcode dans l'une de ces régions d'octets inutiles, et quelques autres astuces intéressantes, il est possible de réduire un ELF à seulement 84 octets - une réduction de 34% en plus des meilleurs efforts actuels de LibGolf. Je vous indique la direction de son incroyable série "ELF Mangling" à [1].
+
+Un autre aspect intéressant de ces techniques est facilement négligé. Bien que le loader Linux semble très peu se soucier de la structure d'un ELF au-delà de ce dont il a besoin pour simplement accéder au code machine, d'autres outils sont beaucoup plus pointilleux. Nous avons déjà examiné objdump et gdb, mais beaucoup de solutions antivirus s'effondrent également face à un ELF malformé. Dans mes recherches, le seul produit qui (en quelque sorte) fait les choses correctement est ClamAV, avec un résultat positif pour "Heuristics.Broken.Executable". Bien sûr, nul ne sait ce que donnera l'analyse dynamique.
+
++------------------------+
+|--[ Aller de l'avant ]--|
++------------------------+
+
+L'x86_64 n'est pas le seul ISA pris en charge par LibGolf! Vous pouvez également l'utiliser pour créer de petits exécutables pour les plates-formes ARM32 et AARCH64. Dans le dépôt sur GitHub [0], vous trouverez quelques exemples pour les deux plates-formes ARM (y compris celle des octets inutiles de cet article).
+
+Mais au diable les exemples! Espérons que la plupart d'entre vous qui êtes arrivés jusqu'ici veulent jeter un coup d'œil à libgolf.h lui-même. Comme je l'ai mentionné au début, tout cela a commencé comme un exercice d'apprentissage, j'ai donc prêté une attention particulière à commenter les choses avec autant de détails que possible.
+
++----------------------------------------+
+|--[ Une note sur la reproductibilité ]--|
++----------------------------------------+
+
+Tout au long de cette recherche, j'ai principalement testé sur Ubuntu 20.04 avec le noyau 5.4.0-65-generic, mais j'ai aussi vérifié que j'obtenais les mêmes résultats sur 5.11.11-arch1-1. J'ai entendu dire que des choses étranges peuvent parfois arriver sur les noyaux WSL, mais je n'ai pas enquêté - peut-être le pouvez vous!
+
++---------------------+
+|--[ Remerciements ]--|
++---------------------+
+
+Un grand merci à tout le monde chez Thugcrowd, Symbolcrash, et le Mental ELF Support Group!
+
++------------------+
+|--[ Références ]--|
++------------------+
+
+[0] https://www.github.com/xcellerator/libgolf
+[1] https://n0.lol/ebm/1.html
+
