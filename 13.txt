@@ -1,0 +1,121 @@
+                                                       ┌───────────────────────┐
+                                                       ▄▄▄▄▄ ▄▄▄▄▄ ▄▄▄▄▄       │
+                                                       │ █   █ █ █ █   █       │
+                                                       │ █   █ █ █ █▀▀▀▀       │
+                                                       │ █   █   █ █     ▄     │
+                                                       │                 ▄▄▄▄▄ │
+                                                       │                 █   █ │
+                                                       │                 █   █ │
+                                                       │                 █▄▄▄█ │
+                                                       │                 ▄   ▄ │
+                                                       │                 █   █ │
+                                                       │                 █   █ │
+                                                       │                 █▄▄▄█ │
+                                                       │                 ▄▄▄▄▄ │
+                                                       │                   █   │
+Interview: herm1t                                      │                   █   │
+~ L'équipe tmp.0ut                                     └───────────────────█ ──┘
+
+t0:
+  Parlez-nous de l'évolution des vx Linux au fil des ans - comment était-ce quand il n'y avait pas la richesse de documentation qui existe aujourd'hui, quelles découvertes dans ce domaine vous ont inspiré, et où voyez-vous cela aller?
+
+herm1t:
+  Les articles de Silvio Cesare et grugq ont beaucoup aidé, ainsi que la liste de diffusion de Tracy Reed. Il y a eu aussi quelques rencontres avec Bliss et quelques autres des premiers virus sur les systèmes de production sur lesquels je travaillais. Pour ce qui est de la documentation, je partage l'attitude OSS d'origine "lis les sources, Luke", c'est le meilleur type de documentation. Bien que la scène de hacking des années 90 et du début des années 2000 ait capturé mon imagination, j'étais timide et je pensais que personne n'était intéressé par mon hobby et j'ai progressé lentement dans les détails techniques jusqu'à ce que le contre-espionnage et la police frappent à ma porte.
+
+t0:
+  Etiez-vous sur undernet #vir / #virus à la fin des années 90?
+
+herm1t:
+  J'ai essayé :-) Mais avec mes faibles compétences linguistiques et mon incapacité à expliquer pourquoi j'étais ici, j'ai été rapidement banni des chans, juste pour revenir et écouter tranquillement et m'ennuyer des bavardages sans fin et sans rapport.
+
+t0:
+  Parlez-nous de l'évolution de votre propre technique d'écriture de vx ELF - quelles techniques avez-vous utilisées en premier, qu'avez-vous fait ensuite, quelle a été la technique la plus difficile? ou celle dont vous êtes le plus fier?
+
+herm1t:
+  La chose la plus importante que j'ai apprise est que vous n'avez pas besoin d'écrire en assembleur pour faire les choses correctement (mais vous devriez quand même apprendre l'asm). Comme les vrais coderz utilisnent de l'asm, j'ai reproduit les trucs de segment de Silvio en asm et j'ai continué pendant des années avant de réaliser que les trucs de bas niveau sont inutiles. On peut facilement injecter le code sans fichier à partir de la mémoire, trouver les imports et ce genre de choses sans même se soucier de la longueur des instructions et autres, cela rend la vie bien plus facile :-)
+
+t0:
+  Quelles méthodes d'infection préférez-vous et quelles techniques aimez-vous le plus? Que pensez-vous à quoi nous pouvons nous attendre dans le futur?
+
+herm1t:
+  Les virus classiques de fichiers sont morts depuis longtemps. Et il existe de nombreux logiciels malveillants modernes qui exploitent deux failles de sécurité flagrantes dans les systèmes Unix (LD_PRELOAD et ptrace), cependant, avec ptrace restreint et la possibilité que LD_PRELOAD sera supprimé, les anciennes techniques d'infection pourraient revenir à la mode, par exemple en remplaçant libz.so dans sshd par lib-qqch ou en ajoutant un petit truc au binaire :-) C'est dommage que les backdoors sshd (comme "Darkside" d'ESET) ou quelque chose comme Darkleech ait encore besoin d'être recompilé sur système cible. Il semble que les blackhats aient raté leurs cours et essayent de réinventer la roue.
+
+t0:
+  Pensez-vous que l'écriture de virus ELF a un avenir? Ou restons-nous dans le passé?
+
+herm1t:
+  Avec Linux dans chaque téléphone, dans les IOT et les ordinateurs de bureau, je suis sûr que l'art de l'infection ELF et les composants internes du système seront à nouveau populaires.
+
+t0:
+  Avez-vous vu la nouvelle protection CET / -fcf-protection qui est implémentée sur 95% des binaires dans Ubuntu 20.04? Avez-vous des réflexions à ce sujet ou avez-vous déjà joué avec?
+
+herm1t:
+  Je ne connais pas encore CET, mais il y a une histoire que je peux vous raconter. Une fois, j'étais après un gars et il me manquait (pour terminer son contrôle de sécurité) son numéro de téléphone. J'ai essayé OSINT mais en vain. Ensuite, je lui ai envoyé un e-mail à partir d'un compte bidon et j'ai écrit "Envoyez-moi votre téléphone, ASAP" et que croyez-vous? Il l'a fait. On ne peut garantir la sécurité par des moyens purement techniques. il y aura toujours une échappatoire.
+
+t0:
+  Que pensez-vous des malwares modernes?
+
+herm1t:
+  La plupart du temps ils sont extrêmement ennuyeux (mais toujours efficace)
+
+t0:
+  Pensez-vous que la scène VX a encore une chance? Avec tout ce qui s'est passé ces derniers temps, les malwares concentrés sur la monétisation, etc. Que s'est-il passé avec VXHeavens? Des projets pour le futur? De quelle manière pensez-vous que l'écriture de malwares a changé ces 10 dernières années?
+
+herm1t:
+  La scène telle que nous la connaissions est morte (j'en ai discuté avec LovinGod récemment et il a qualifié VXH de "cercueil d'une scène"), mais il pourrait y avoir une communauté plus large, car l'écriture de virus et le piratage en général sont devenus plus actuels que jamais. En 2018, j'ai repéré le webshell (installé par n'importe qui sauf moi) sur le site du ministère de la Justice d'Ukraine et me suis moqué d'eux sur Facebook. La cyberpolice l'a pris au sérieux et a décidé de faire un raid sur le messager. J'étais au courant du raid en avance et j'ai fermé le site (car le partage de virus en Ukraine est illégal sous quelque forme que ce soit), peut-être que je vais le restaurer sous une forme ou une autre. Avec une audience sur "l'affaire Greta" dans quatre jours, j'ai du mal à fixer une date :-)
+
+  D'ailleurs, avec tous ces endbr64 dans .plt et ailleurs, si vous modifiez le binaire, il "protégera" votre virus contre les rets "non autorisés" :-)
+
+t0:
+  Parlez nous de vos propre virus linux - Casher, Cavity, Pulpit, other?
+
+herm1t:
+  La plupart de mes virus étaient axés sur des trucs du format ELF. J'ai juste ouvert un exécutable au hasard et parcouru les sections avec quelques questions en tête - Pourrait-il être déplacé ou réduit pour faire de la place? Pourriez-vous en obtenir le contrôle pour éviter de toucher le point d'entrée? Donc, les virus font exactement cela, "Coin" a obtenu plus d'espace à partir de l'alignement des segments, "Caveat" a mis le chargeur dans le PHT, "Arches" a padder les fonctions, "Hasher" a joué avec .hash, "PiLoT" avec la .plt; les plus récents arrêtent d'utiliser de l'assembleur, l'arrête les modèles de type DOS utilisant directement les syscalls pour passer aux imports de la libc qui est toujours présente en mémoire et aller plus loin vers l'auto-relocalisation (RELx) et le métamorphisme (Lacrimae). Depuis je suis toujours intéressé par les internals de la glibc et du kernel, ce qui m'aide beaucoup avec la programmation système et la sécurité (ce que je fais au boulot)
+
+t0:
+  Que pensez-vous du métamorphisme dans les langages de script? Je pense à "Metamorphism and Self-Compilation in JavaScript" écrit par SPTH
+
+herm1t:
+  Pour en revenir à la technique, vous savez probablement que je suis un grand fan des trucs de compilateurs et je suis convaincu que les DSL et les compilateurs sont le prochain grand truc après le métamorphisme, qu'il s'agisse de scripts (ce qui est moins compliqué) ou de code machine.
+
+t0:
+  Comment avez-vous acquis d'autres compétences - l'ingénierie sociale - cela vous vient-il naturellement ou avez-vous étudié la psychologie, ou lu ce que d'autres ont fait en ingénierie sociale?
+
+herm1t:
+  Toute grande bureaucratie a des faiblesses inhérentes, c'est le système et il peut être piraté, si vous savez à quoi une demande légitime ressemble vous pourriez la forger, en utilisant la rivalité entre institutions, vous pourriez ne leur laisser aucun autre choix que d'agir. En ayant accès à des e-mails piratés, vous pouvez pratiquement entrer dans la tête de la cible et manipuler la personne pour qu'elle fasse ce dont vous avez besoin. J'aime plus le processus, le moment où vous trouvez votre chemin de contournement de la sécurité. Mais la phase «message», où vous mettez en ligne les informations obtenues et avertissez la presse, est pareille. Vous devez transmettre votre message à la fois aux cibles pour leur faire mal et à un large public, pour les convaincre que c'était la bonne chose à faire, donc c'est un peu comme du piratage mais avec des gens plutôt qu'avec des machines.
+
+t0:
+  Que pensez-vous des CTF et autres compétitions de hacking?
+
+herm1t:
+  Je n'aime pas les CTF parce que je déteste avoir pression du temps. Je sais comment faire les choses rapidement et rester calme, mais ça me fait peur quand je vois l'horloge tourner.
+
+t0:
+  Avez-vous déjà endommagé votre propre système en testant un virus? Si oui, pouvez-vous nous en parler?
+
+herm1t:
+  Comme aucun de mes virus n'a de charge destructrice et qu'ils étaient intentionnellement limités au répertoire courant, ils étaient sûr à tester. Ils se sont peut être échappés une ou deux fois, mais il était facile de réinstaller les paquets affectés.
+
+t0:
+  A quoi ressemblerais votre virii de rêve?
+
+herm1t:
+  Complexité, irrégularité. Plus c'est complexe, mieux c'est.
+
+t0:
+  A quels autres endroits hors de la technologie cherchez-vous l'inspiration?
+
+herm1t:
+  Il m'est difficile de trouver quelque chose en dehors de la technologie, je fais sûrement des choses que tout le monde fait, mais mes préférés sont les mathématiques, la cryptographie et mettre le bazar en politique.
+
+t0:
+  Pouvez-vous partager quelques réflexions sur les ransomwares?
+
+herm1t:
+  Les ransomwares sont aussi vieux que notre domaine. Le trojan AIDS a été écrit en 1989! L'utilisation de la crypto-monnaie et sa nature moins traçable ont rendu la prolifération des ransomwares inévitable. D'un point de vue technique, c'est ennuyeux (à l'exception des erreurs hilarantes de cryptographie que certains auteurs ont faites, comme générer la clé par RNG seeder avec time(NULL), et après avoir été publiquement humilier, la remplacer par quelque chose comme md5(time(NULL))
+
+t0:
+  C'est votre espace libre, herm1t. Ici, vous pouvez laisser tout ce que vous voulez: salutations ou souhaits pour vos amis ou d'autres, etc.
+
+herm1t:
+  Salutations à tous les hackers et vxers du passé et du futur :)

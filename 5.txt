@@ -1,0 +1,134 @@
+                                                         ┌───────────────────────┐
+                                                         ▄▄▄▄▄ ▄▄▄▄▄ ▄▄▄▄▄       │
+                                                         │ █   █ █ █ █   █       │
+                                                         │ █   █ █ █ █▀▀▀▀       │
+                                                         │ █   █   █ █     ▄     │
+                                                         │                 ▄▄▄▄▄ │
+                                                         │                 █   █ │
+                                                         │                 █   █ │
+                                                         │                 █▄▄▄█ │
+                                                         │                 ▄   ▄ │
+                                                         │                 █   █ │
+                                                         │                 █   █ │
+                                                         │                 █▄▄▄█ │
+                                                         │                 ▄▄▄▄▄ │
+                                                         │                   █   │
+Fuzzer Radare2 Pour 0days En 30 Lignes De Code           │                   █   │
+~ Architect & S01den                                     └───────────────────█ ──┘
+
+--- Résumé ---
+
+Radare2 est un framework open-source bien connu de rétro-ingénierie et d'analyse binaire.
+
+Ce type d'outil est intéressant à analyser ou à chercher pour des vulnérabilités, car ils sont utilisés dans des domaines comme l'analyse de malwares.
+
+Dans cet article, nous expliquerons comment nous avons découvert deux bug (CVE-2020-16269 et CVE-2020-17487) à partir de rien, en écrivant notre propre fuzzer -stupide- et en faisant un peu de rétro-ingénierie.
+
+Dans une première partie, nous expliquerons comment nous avons fuzzé radare2 et dans une seconde partie, nous verrons comment nous avons utilisé les crashs trouvés en fuzzant afin d'analyser, d'isoler et reproduire les bugs, en prenant comme exemple le bug ELF (CVE-2020-16269).
+
+--- Fuzzing ---
+
+Afin de trouver les deux vulnérabilités, nous avons appliqué un fuzzing stupide à notre cible. Le facteur clé lors du fuzzing stupide est d'avoir un corpus diversifié en termes de couverture de code.
+
+Nous avons choisi d'utiliser le dépôt testbins de Radare2 [0].
+
+Pendant le fuzzing, nous avons trouvé des crashs en 30 minutes, dans plusieurs formats de fichiers différents. Parmi les formats qui nous intéressaient, PE et ELF, les deux formats exécutables les plus utilisés.
+
+Sans plus attendre, voici une toute petite version de notre fuzzer.
+
+---------------------------------- COUPEZ ICI ------------------------------------
+import glob;import random;import subprocess;import hashlib
+
+def harness(d):
+    tf = open("wdir/tmp", "wb")
+    tf.write(d)
+    tf.close()
+    try:
+        p = subprocess.run(['r2','-qq', '-AA','wdir/tmp'], stdin=None, timeout=10)
+    except:
+        return
+    try:
+        p.check_returncode()
+    except:
+        print(f"Proc exited with code {p.returncode}")
+        fh = hashlib.sha256(d).hexdigest()
+
+        dump = open(f'cdir/crash_{fh}', 'wb')
+        dump.write(d);dump.close()
+
+def mutate(data):
+    mutable_bytes = bytearray(data)
+    for a in range(10):
+        r = random.randint(0, len(mutable_bytes)-1)
+        mutable_bytes[r] = random.randint(0,254)
+
+    return mutable_bytes
+
+if __name__ == '__main__':
+    fs = glob.glob("corpus/*")
+    while True:
+        f = open(random.choice(fs), 'rb').read()
+        harness(mutate(f))
+----------------------------------------------------------------------------------
+
+--- Exploitation ---
+
+Avoir quelques exemples qui font crasher Radare2 nous permet d'examiner la raison du crash.
+
+Le premier est un fichier ELF, une version mutée de dwarftest, un fichier d'exemple contenant des informations DWARF.
+
+==================================================================================
+$ file dwarftest
+---> dwarftest: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically
+linked, ...,with debug_info, not stripped
+==================================================================================
+
+Pour savoir quel octet déclenche le bug, nous analysons l'exemple incriminé avec Radare2 chargé à l'aide d'un debugger.
+
+Il est également possible de comparer l'exemple original à sa mutation pour trouver le ou les octets incriminés.
+
+Nous pouvons le faire facilement grâce à radiff2:
+==================================================================================
+$ radiff2 bins/src/dwarftest mutated_dwarftest
+0x000010e1 00 => 01 0x000010e1
+==================================================================================
+
+Cet offset dans le fichier fait partie de la structure DWARF. Cela n'est vrai que pour les binaires qui ont déjà des informations DWARF attachées, mais nous devrions être en mesure de créer des informations DWARF malformées et de les injecter dans n'importe quel fichier ELF.
+
+Pour comprendre pourquoi nos informations DWARF dérangent Radare2, nous pouvons jeter un coup d'œil avec objdump:
+==================================================================================
+$ objdump --dwarf=info mutated_dwarftest
+...
+      <4c> DW_AT_name :objdump: WARNING: the DW_FORM_strp shift is too
+      large: 164 (indirect string, shift: 0x164): <shift too large>
+...
+==================================================================================
+
+Nous avons presque terminé.
+
+Maintenant, il suffit de regarder comment nous pouvons l'exploiter. Pour cela, regardons la trace d'un crash avec gdb puis d'analysons le code source de la fonction (radare2 étant heureusement un projet open-source) où le bug est déclenché.
+
+La ligne incriminée est dans la fonction parse_typedef:
+==================================================================================
+name = strdup (value->string.content);
+==================================================================================
+
+Cela déclenche le déréférencement d'un pointeur nul lorsque la chaîne dupliquée est NULL, et sans entrer dans les détails, nous avons compris grâce au pouvoir interdit du reverse engineering que c'est le cas lorsqu'un décalage dans DW_AT_name est trop important.
+
+Il est maintenant temps d’écrire un script qui peut modifier n’importe quel fichier ELF pour déclencher le bug. En annexe, vous pouvez trouver l'exploit complet, contenant l'exploitation du bug PE (CVE-2020-17487, qui rend aussi simplement radare2 incapable de charger le binaire)
+
+--- Conclusion ---
+
+Nous espérons que vous avez apprécié cet article.
+
+Maintenant, vous savez qu'il n'est pas si difficile de trouver des bugs dans des outils largement utilisés. Alors maintenant, essayez d'en trouver vous-même (et surtout dans les outils de reverse engineering)!
+
+Même si le bug n'est pas exploitable autrement qu'un DoS, planter un outil de reverse engineering lors du chargement d'un binaire reste utile ...
+
+--- Notes & Références ---
+
+[0] https://github.com/radareorg/radare2-testbins
+
+--- Appendix ---
+
+- Exploit POC (See 5.1.py in txt/)
