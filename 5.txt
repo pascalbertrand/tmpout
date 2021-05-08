@@ -131,4 +131,4 @@ Même si le bug n'est pas exploitable autrement qu'un DoS, planter un outil de r
 
 --- Appendix ---
 
-- Exploit POC (See 5.1.py in txt/)
+- POC de l'exploit (Voir 5.1.py dans txt/)

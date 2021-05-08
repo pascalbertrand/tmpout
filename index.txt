@@ -16,7 +16,7 @@
 │ tmp.0ut Volume 1 - Avril 2021                             │                   █   │
 │                                     CONTENU               └───────────────────█ ──┘
 │                                                                                  │ 
-│ 1.0  Intro ....................................................... tmp.0ut Staff │ 
+│ 1.0  Intro .................................................... L'équipe tmp.0ut │ 
 │ 1.1  Octets Inutiles ............................................... xcellerator │ 
 │ 1.2  Implémenter La Méthode D'Infection PT_NOTE En Assembleur x64 ........ sblip │ 
 │ 1.3  Injecteur ELF PT_NOTE à PT_LOAD En Rust ............................. d3npa │ 
@@ -28,8 +28,8 @@
 │ 1.9  Chargement De LKM Depuis La Mémoire ............................. netspooky │ 
 │ 1.10 Chargement SHELF Linux ................................. ulexec, Anonymous_ │ 
 │ 1.11 Retour Au Point D'Entré Original Dans Un PIE ....................... s01den │ 
-│ 1.12 Ecrire Des Virus En Assembleur MIPS Pour Le Fun (Et Sans Profit) ... s01den │ 
-│ 1.13 Interview: herm1t ........................................... tmp.0ut Staff │ 
+│ 1.12 Ecrire Des Virus En Asm MIPS Pour Le Fun (Et Sans Profit) .......... s01den │ 
+│ 1.13 Interview: herm1t ........................................ L'équipe tmp.0ut │ 
 │ 1.14 360 SECONDES CHRONO - Linux/Retaliation ............................ qkumba │ 
 │ 1.15 Linux.Nasty.asm ....................................................... TMZ │ 
 │ 1.16 Linux.Precinct3.asm ............................................. netspooky │ 

