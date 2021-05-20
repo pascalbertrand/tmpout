@@ -13,18 +13,18 @@
                                                          │                 █▄▄▄█ │
                                                          │                 ▄▄▄▄▄ │
                                                          │                   █   │
-Fuzzer Radare2 Pour 0days En 30 Lignes De Code           │                   █   │
+Trouver des 0days en Fuzzant Radare2 en 30 LDC           │                   █   │
 ~ Architect & S01den                                     └───────────────────█ ──┘
 
 --- Résumé ---
 
 Radare2 est un framework open-source bien connu de rétro-ingénierie et d'analyse binaire.
 
-Ce type d'outil est intéressant à analyser ou à chercher pour des vulnérabilités, car ils sont utilisés dans des domaines comme l'analyse de malwares.
+Ce type d'outil est intéressant pour l'analyse de binaire, la recherche de vulnérabilités, puisqu'ils sont utilisés dans des domaines comme l'analyse de malwares.
 
-Dans cet article, nous expliquerons comment nous avons découvert deux bug (CVE-2020-16269 et CVE-2020-17487) à partir de rien, en écrivant notre propre fuzzer -stupide- et en faisant un peu de rétro-ingénierie.
+Dans cet article, nous expliquerons comment nous avons découvert deux bugs (CVE-2020-16269 et CVE-2020-17487) à partir de rien, en écrivant notre propre fuzzer -stupide- et en faisant un peu de rétro-ingénierie.
 
-Dans une première partie, nous expliquerons comment nous avons fuzzé radare2 et dans une seconde partie, nous verrons comment nous avons utilisé les crashs trouvés en fuzzant afin d'analyser, d'isoler et reproduire les bugs, en prenant comme exemple le bug ELF (CVE-2020-16269).
+Dans une première partie, nous expliquerons comment nous avons fuzzé Radare2 et dans une seconde partie, nous verrons comment nous avons utilisé les crashs trouvés en fuzzant afin d'analyser, d'isoler et reproduire les bugs, en prenant comme exemple le bug ELF (CVE-2020-16269).
 
 --- Fuzzing ---
 
@@ -73,7 +73,7 @@ if __name__ == '__main__':
 
 --- Exploitation ---
 
-Avoir quelques exemples qui font crasher Radare2 nous permet d'examiner la raison du crash.
+Avec nos quelques examples qui font crasher Radare2, regardons un peu les raisons qui provoquent les crashs.
 
 Le premier est un fichier ELF, une version mutée de dwarftest, un fichier d'exemple contenant des informations DWARF.
 
@@ -115,7 +115,7 @@ name = strdup (value->string.content);
 
 Cela déclenche le déréférencement d'un pointeur nul lorsque la chaîne dupliquée est NULL, et sans entrer dans les détails, nous avons compris grâce au pouvoir interdit du reverse engineering que c'est le cas lorsqu'un décalage dans DW_AT_name est trop important.
 
-Il est maintenant temps d’écrire un script qui peut modifier n’importe quel fichier ELF pour déclencher le bug. En annexe, vous pouvez trouver l'exploit complet, contenant l'exploitation du bug PE (CVE-2020-17487, qui rend aussi simplement radare2 incapable de charger le binaire)
+Il est maintenant temps d’écrire un script qui peut modifier n’importe quel fichier ELF pour déclencher le bug. En annexe, vous pouvez trouver l'exploit complet, contenant l'exploitation du bug PE (CVE-2020-17487, qui rend aussi simplement Radare2 incapable de charger le binaire)
 
 --- Conclusion ---
 
