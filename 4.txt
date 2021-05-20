@@ -16,7 +16,7 @@
 Désinfecteur PT_NOTE                                                       │                   █   │
 ~ manizzle                                                                 └───────────────────█ ──┘
 
-Salut tout le monde. Pour commencer, je ne suis pas un AVer. Les antivirus sont nuls, ils sont bugués et sont généralement exploitatable. N'hésitez pas à fuzzer lief et capstone à mort. Je suis sûr qu'ils ont des bugs. Maintenant, comment désinfecter...
+Salut tout le monde. Pour commencer, je ne suis pas un AVer. Les antivirus sont nuls, ils sont bugués et sont généralement exploitable. N'hésitez pas à fuzzer lief et capstone à mort. Je suis sûr qu'ils ont des bugs. Maintenant, comment désinfecter...
 
 La technique d'injection PT_NOTE est assez propre et permet de remplir un emplacement mémoire prêt à l'emploi avec des goodies. Mais avec toutes les techniques d'infection, il existe généralement une technique de désinfection. C'est la vie.
 
