@@ -9,7 +9,7 @@
  `-------'  `------'`--' `--' `-------'        `------'   `--'         `--'   `------' `-----'
                                                                                   ~ xcellerator
 
-Oyez, chers fidèles de l'ELF! Dans cet article, je souhaite vous présenter une petite bibliothèque sur laquelle je travaille appelé LibGolf. Elle a commencé comme un simple moyen de mieux comprendre ELF et les en-têtes de programme, mais est devenu quelque chose de raisonnablement pratique. Elle rend très facile la génération d'un binaire constitué d'un en-tête ELF, suivi d'un seul en-tête de programme, suivi d'un seul segment chargeable. Par défaut, tous les champs des en-têtes sont définis sur des valeurs saines, mais il est simple de jouer avec ces valeurs par défaut - et c'est ce dont parle cet article! je vais démontrer comment j'ai utilisé LibGolf pour énumérer précisément quels octets sont nécessaires et lesquels sont ignorés par le loader Linux. Heureusement, il s'avère que le loader est l'un des analyseurs les moins pointilleux parmi la boîte à outils Linux standard. Avant de terminer, nous verrons plusieurs outils d'analyse statiques populaires s'effondrant devant notre ELF corrompu, tandis que le loader continue à le charger joyeusement et sauter à nos octets choisis.
+Oyez, chers fidèles de l'ELF! Dans cet article, je souhaite vous présenter une petite bibliothèque sur laquelle je travaille appelé LibGolf. Elle a commencé comme un simple moyen de mieux comprendre ELF et les en-têtes de programme, mais est devenu quelque chose de raisonnablement pratique. Elle rend très facile la génération d'un binaire constitué d'un en-tête ELF, suivi d'un seul en-tête de programme, suivi d'un seul segment chargeable. Par défaut, tous les champs des en-têtes sont définis sur des valeurs saines, mais il est simple de jouer avec ces valeurs par défaut - et c'est ce dont parle cet article! je vais démontrer comment j'ai utilisé LibGolf pour énumérer précisément quels octets sont nécessaires et lesquels sont ignorés par le loader Linux. Heureusement, il s'avère que le loader est l'un des analyseurs les moins pointilleux parmi la boîte à outils Linux standard. Avant de terminer, nous verrons plusieurs outils d'analyse statiques populaires s'effondrant devant notre ELF corrompu, tandis que le loader continue à le charger joyeusement et saute à nos octets choisis.
 
 +-------------------------------+
 |--[ Présentation de LibGolf ]--|
@@ -44,7 +44,7 @@ Utilisez celui-ci ou un autre shellcode (mais assurez-vous qu'il PIC - il n'y a 
 
 Compiler ceci et lancer l'exécutable résultant vous fournira un fichier .bin - c'est votre ELF tout beau, tout neuf! Assez simple, non? La simplicité est souvent accompagnée par l'ennui, comme ici, alors faisons quelque chose de plus intéressant!
 
-Avant de continuer, cela vaut la peine d'expliquer ce que font ces deux macros dans les coulisses. Tout d'abord, INIT_ELF () prend deux arguments, l'ISA et l'architecture. Actuellement, LibGolf prend en charge X86_64, ARM32 et AARCH64 en tant qu'ISA valides et 32 ​​ou 64 pour l'architecture. Il met d'abord en place certaines structures de internes et décide s'il doit utiliser les objets Elf32_ * ou Elf64_ * pour les en-têtes. Il attribue également des pointeurs à l'en-tête ELF et à l'en-tête de programme, respectivement appelées ehdr et phdr. Ce sont ces pointeurs que nous utiliserons pour modifier facilement les champs. A part ça, il copie également le buffer du shellcode et remplit les en-têtes ELF et programme avant de calculer un point d'entrée. Vient maintenant GEN_ELF (), qui affiche juste de belles statistiques sur stdout, puis écrit les structures appropriées dans le fichier .bin. Le nom du .bin est déterminé par argv [0].
+Avant de continuer, cela vaut la peine d'expliquer ce que font ces deux macros dans les coulisses. Tout d'abord, INIT_ELF () prend deux arguments, l'ISA (Instruction Set Architecture) et l'architecture. Actuellement, LibGolf prend en charge X86_64, ARM32 et AARCH64 en tant qu'ISA valides et 32 ou 64 pour l'architecture. Il met d'abord en place certaines structures internes et décide s'il doit utiliser les objets Elf32_ * ou Elf64_ * pour les en-têtes. Il attribue également des pointeurs à l'en-tête ELF et à l'en-tête de programme, respectivement appelées ehdr et phdr. Ce sont ces pointeurs que nous utiliserons pour modifier facilement les champs. A part ça, il copie également le buffer du shellcode et remplit les en-têtes ELF et programme avant de calculer un point d'entrée. Vient maintenant GEN_ELF (), qui affiche juste de belles statistiques sur stdout, puis écrit les structures appropriées dans le fichier .bin. Le nom du .bin est déterminé par argv [0].
 
 Donc, après avoir utilisé la macro INIT_ELF (), ehdr et phdr sont disponibles. Supposez que nous voulions modifier le champ e_version de l'en-tête ELF. Il suffit d'ajouter une seule ligne:
 
@@ -62,7 +62,7 @@ Donc, après avoir utilisé la macro INIT_ELF (), ehdr et phdr sont disponibles.
             return 0;
         }
 
-Une rapide recompilation et exécution, et vous aurez un autre fichier .bin qui vous attend. Jeter un oeil à ce fichier avec xxd, hexyl, ou votre manipulateur favori, vous verrez qu'un '12 34 56 78' vous regarde à l'offset 0x14. C'était pas facile?
+Une rapide recompilation et exécution, et vous aurez un autre fichier .bin qui vous attend. Jeter un oeil à ce fichier avec xxd, hexyl, ou votre manipulateur favori, vous verrez qu'un '12 34 56 78' vous regarde à l'offset 0x14. N'est-ce pas facile?
 
 Pour aller un peu plus vite, j'aime utiliser le Makefile suivant:
 
@@ -85,7 +85,7 @@ Pour aller un peu plus vite, j'aime utiliser le Makefile suivant:
 |--[ Tomber Au Premier Obstacle ]--|
 +----------------------------------+
 
-Comme beaucoup le savent, les parseurs de fichiers sont horribles. Alors que les spécifications ont généralement des objectifs sérieux, ceux-ci sont rarement respectés par ceux qui devraient les respecter. Chef parmi ces blasphémateurs est le loader ELF Linux en personne. LibGolf permet facilement d'étudier l'étendue de ces crimes contre elf.h.
+Comme beaucoup le savent, les parseurs de fichiers sont horribles. Alors que les spécifications ont généralement des objectifs sérieux, ceux-ci sont rarement respectés par ceux qui devraient les respecter. Le chef parmi ces blasphémateurs est le loader ELF Linux en personne. LibGolf permet facilement d'étudier l'étendue de ces crimes contre elf.h.
 
 Un bon point de départ est le tout début, l'en-tête ELF. Au début de tout fichier ELF est bien sûr, le familier 0x7f suivi de ELF, connu de ses amis comme EI_MAG0 à EI_MAG3. Sans surprise, la modification de l'un de ces quatre octets entraîne le rejet du fichier par le loader Linux. Dieu merci pour ca!
 
@@ -95,7 +95,7 @@ Qu'en est-il de l'octet 0x5 ? Notre fidèle spécification nous indique qu'il s'
 
 à notre fichier C. (Pourquoi 0x58? Il apparaît clairement dans la sortie xxd / hexyl!)
 
-Avant d'essayer d'exécuter notre nouveau fichier .bin, essayons quelques outils de parsing ELF pour rechercher d'autres coupables. Le premier sur la liste est gdb. Continuez, Je vous attend. Que c'est-il passé ?
+Avant d'essayer d'exécuter notre nouveau fichier .bin, essayons quelques outils de parsing ELF pour rechercher d'autres coupables. Le premier sur la liste est gdb. Continuez, Je vous attend. Que s'est-il passé ?
 
         "not in executable format: file format not recognized"
 
@@ -118,9 +118,9 @@ Soudain, une e_version sauvage apparaît! Nous voilà confrontés à un autre di
 
 A la suite de cette chaîne d'hérétiques, nous avons quelques champs importants qui semblent résistants aux abus; e_entry et e_phoff. Je suis sûr que je n'ai pas besoin d'entrer dans les détails sur e_entry; C'est le point d'entrée du binaire, où l'exécution sera transférée une fois les sections chargées en mémoire. Alors que l'on pourrait s'attendre à ce que le loader se débrouille sans savoir ce quel est l'offset à partir de l'en-tête du programme, il semble qu'il n'est pas assez intelligent pour le comprendre sans être nourri à la cuillère. Mieux vaut laisser ces deux champs tranquilles.
 
-LibGolf ne supporte pas encore les en-têtes de section (et étant donné qu'il se concentre sur la production de * petits * binaires, il peu probable qu'il les supporte à l’avenir). Cela signifie que, pour toutes les en-têtes s'y rapportant, nous pouvons jouer à notre guise. Cela inclut e_shoff, e_shentsize, eh_shnum et même e_shstrndx. Si nous n'avons aucune en-tête de section, nous ne pouvons être tenus responsables de leur corruption!
+LibGolf ne supporte pas encore les en-têtes de section (et étant donné qu'il se concentre sur la production de * petits * binaires, il est peu probable qu'il les supporte à l’avenir). Cela signifie que, pour toutes les en-têtes s'y rapportant, nous pouvons jouer à notre guise. Cela inclut e_shoff, e_shentsize, eh_shnum et même e_shstrndx. Si nous n'avons aucune en-tête de section, nous ne pouvons être tenus responsables de leur corruption!
 
-Les champs restants qui semblent importer au loader Linux sont e_ehsize, e_phentsize, et e_phnum. Encore une fois, ce n'est pas trop surprenant, car ils sont concernés par le chargement du seul segment chargeable en mémoire avant de passer la main. Si vous avez besoin d'un rappel, e_ehsize est le taille de l'en-tête ELF (qui est respectivement 0x34 ou 0x40 pour 32 et 64 bits), eh_phentsize est la taille de l'en-tête du programme à venir (encore une fois, codé en dur à 0x20 ou 0x38 pour 32 et 64 bits). Si le loader avait été un peu plus pointilleux sur EI_CLASS, il n'aurait pas besoin ces deux champs. Enfin, e_phnum est juste le nombre d'entrées dans l'en-tête du programme - pour nous c'est toujours 0x1. Sans aucun doute, cela est utilisé pour une boucle dans les routines de chargement de la mémoire, mais je ne l'ai pas encore enquêté plus loin.
+Les champs restants qui semblent importer au loader Linux sont e_ehsize, e_phentsize, et e_phnum. Encore une fois, ce n'est pas trop surprenant, car ils sont concernés par le chargement du seul segment chargeable en mémoire avant de passer la main. Si vous avez besoin d'un rappel, e_ehsize est le taille de l'en-tête ELF (qui est respectivement 0x34 ou 0x40 pour 32 et 64 bits), eh_phentsize est la taille de l'en-tête du programme à venir (encore une fois, codé en dur à 0x20 ou 0x38 pour 32 et 64 bits). Si le loader avait été un peu plus pointilleux sur EI_CLASS, il n'aurait pas besoin ces deux champs. Enfin, e_phnum est juste le nombre d'entrées dans l'en-tête du programme - pour nous c'est toujours 0x1. Sans aucun doute, cela est utilisé pour une boucle dans les routines de chargement de la mémoire, mais je n'ai pas encore enquêté plus loin.
 
 Il reste encore un champ dans l'en-tête ELF que je n'ai pas abordé, à savoir e_flags. La raison est assez simple, il dépend de l'architecture. Pour x86_64, cela n'a pas d'importance car il n'est pas défini (bien que * soit * important pour certaines plates-formes ARM! Jetez un œil à l'exemple arm32 à [0]).
 
