@@ -30,7 +30,7 @@ L'infection se résume à trois étapes :
     - Charger le shellcode à une adresse spécifique en mémoire virtuelle 
     - Modifier le point d'entrée du fichier ELF à l'adresse ci-dessus afin que le shellcode soit exécuté en premier.
 
-Le shellcode doit également être corrigé pour chaque fichier ELF afin de retourner au point d'entrée original du fichier ELF hôte, permettant ainsi à l'hôte de s'exécuter normalement une fois le shellcode terminé.
+Le shellcode doit également être modifié pour chaque fichier ELF afin de retourner au point d'entrée original du fichier ELF hôte, permettant ainsi à l'hôte de s'exécuter normalement une fois le shellcode terminé.
 
 Le shellcode peut être chargé en mémoire virtuelle via un en-tête PT_LOAD. L'insertion d'un nouvel en-tête dans le fichier ELF casserait probablement de nombreux offset, mais il est généralement possible de réaffecter un en-tête PT_NOTE sans rien casser. 
 
