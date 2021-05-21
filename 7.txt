@@ -21,7 +21,7 @@ mail: S01den@protonmail.com
 
 --- Introduction ---
 
-Avec Sblip, nous avons travaillé tout un week-end sur Lin64.Eng3ls pour un événement privé. Basiquement Eng3ls est Lin64.Kropotkine[0], la méthode d'infection est toujours le même bon vieux segment PT_NOTE à PT_LOAD, mais nous avons ajouté quelques techniques d'obfuscation.
+Avec Sblip, nous avons travaillé tout un week-end sur Lin64.Eng3ls pour un événement privé. En gros, Eng3ls est Lin64.Kropotkine[0], la méthode d'infection est toujours le même bon vieux segment PT_NOTE à PT_LOAD, mais nous avons ajouté quelques techniques d'obfuscation.
 
 En effet, Kropotkine n'est pas du tout furtif : le point d'entrée des binaires infectés est modifié pour pointer directement vers le virus et le code viral est en clair (donc facile à analyser...).
 
@@ -54,7 +54,7 @@ Je ne vais pas expliquer en détail comment cela fonctionne, il y a déjà un pa
 
 Ainsi, l'adresse du code situé dans .init_array est exécutée avant le point d'entrée. C'est exactement le genre de chose que nous voulions!
 
-J'ai choisi d'implémenter d'abord une petite technique anti-débugage, une vérification de ptrace pour voir si le processus actuel est tracé (donc débugué ou stracé) ou non.
+J'ai choisi d'implémenter d'abord une petite technique anti-débogage, une vérification de ptrace pour voir si le processus actuel est tracé (donc débogué ou stracé) ou non.
 Le classique "if (ptrace(PTRACE_TRACEME, 0, 1, 0) == -1) exit(0);"...
 Facile à contourner (patcher le virus ou mettre rax = 0 dans gdb à la comparaison)...
 Donc je l'ai rendu "difficile" (pas vraiment) à détecter!
@@ -93,7 +93,7 @@ check_dbg:
 -------------------------------------------------------------------------------------
 
 J'ai écrit quelques octets de false-disassembly (qui changent à chaque nouvelle infection) dans la routine et je l'ai fait appeler avant main() en abusant de .init_array.
-Ainsi, en cas de débugage, le virus arrête son exécution, même avec un point d'arrêt sur le point d'entrée.
+Ainsi, en cas de débogage, le virus arrête son exécution, même avec un point d'arrêt sur le point d'entrée.
 
 En ce qui concerne le virus en lui-même, je l'ai fait appeler à la fin, en abusant de .fini_array. Voici les routines que j'ai écrites pour analyser la table d'en-tête de section dans la recherche de .init_array et .fini_array, et pour les patcher.
 
@@ -136,7 +136,7 @@ ctor_found:
 
 La modification du point d'entrée c'est nul, utilisez plutôt des astuces d'obfuscation du point d'entrée comme le détournement de .init_array ou de .fini_array.
 
-Ajoutez quelques astuces anti-RE amusantes pour pimenter vos virus : une pincée de cryptage par-ci, une cuillerée de détection du débugueur par-là...
+Ajoutez quelques astuces anti-RE amusantes pour pimenter vos virus : une pincée de cryptage par-ci, une cuillerée de détection du débogueur par-là...
 
 J'espère que cet article vous a plu et que vous avez appris quelque chose.
 
