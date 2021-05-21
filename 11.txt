@@ -74,7 +74,7 @@ Fondamentalement, l'idée pour calculer l'OEP n'est pas vraiment compliquée. Su
 
 Eh bien, appelez get_rip mettez RIP dans RAX, sachant qu'il faut d'abord soustraire RAX (0x55556156edb5) à la taille du virus (plus 5, la taille de l'instruction call get_rip) pour avoir l'adresse aléatoire du début du code du virus :
 
----> 0x55556156edb5 - (0x508 + 5) = 0x55556156e8a8 ; the address of the first instruction of the vx code
+---> 0x55556156edb5 - (0x508 + 5) = 0x55556156e8a8 ; l'adresse de la première instruction du code du virus
 
 Maintenant, nous soustrayons cela avec le nouveau point d'entrée, l'adresse non aléatoire du début du code du virus (qui a été calculée auparavant dans l'exécution du virus, 0xc01a8a8 dans notre cas).
 
